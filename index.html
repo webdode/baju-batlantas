@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Batlantas – PO T-Shirt #3 Anniversary</title>
+  <link rel="icon" type="image/png" href="logo.png" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header class="header">
+    <div class="brand">
+      <img src="logo.png" alt="Logo Batlantas" class="logo-img" />
+      <div>
+        <h1>BAT' LANTAS</h1>
+        <p>Bali Timur Lintas Scooter • PO T-Shirt #3 Anniversary</p>
+      </div>
+      <div class="sync">
+        <span id="syncStatus" class="status load">Memuat...</span>
+        <button class="btn small" id="btnSync" title="Ambil data terbaru dari Google Sheets">🔄 Muat Ulang</button>
+      </div>
+    </div>
+    <nav class="tabs">
+      <button class="tab active" data-tab="input">Input Penjualan</button>
+      <button class="tab" data-tab="rekap">Rekap Anggota</button>
+      <button class="tab" data-tab="data">Data Penjualan</button>
+      <button class="tab" data-tab="setting">Pengaturan</button>
+    </nav>
+  </header>
+
+  <main class="container">
+    <!-- Ringkasan -->
+    <section class="stats">
+      <div class="stat"><span>Total Kaos Terjual</span><strong id="statQty">0</strong></div>
+      <div class="stat"><span>Total Pendapatan</span><strong id="statTotal">Rp 0</strong></div>
+      <div class="stat"><span>Jumlah Transaksi</span><strong id="statTrx">0</strong></div>
+      <div class="stat"><span>Penjual Terbaik</span><strong id="statTop">-</strong></div>
+    </section>
+
+    <!-- TAB INPUT -->
+    <section class="panel active" id="tab-input">
+      <div class="grid-2">
+        <div class="card">
+          <h2>Input Penjualan Baru</h2>
+          <form id="saleForm">
+            <label>Anggota (Penjual)
+              <select id="fMember" required></select>
+            </label>
+            <label>Nama Pembeli
+              <input type="text" id="fBuyer" placeholder="Opsional" />
+            </label>
+            <div class="row">
+              <label>Kategori
+                <select id="fCategory" required></select>
+              </label>
+              <label>Ukuran Baju
+                <select id="fSize" required></select>
+              </label>
+            </div>
+            <div class="row">
+              <label>Jumlah
+                <input type="number" id="fQty" min="1" value="1" required />
+              </label>
+              <label>Harga Satuan
+                <input type="text" id="fPrice" readonly />
+              </label>
+            </div>
+            <div class="row">
+              <label>Tanggal
+                <input type="date" id="fDate" required />
+              </label>
+              <label>Status Bayar
+                <select id="fPaid">
+                  <option value="0">❌ Belum Bayar</option>
+                  <option value="1">✅ Sudah Bayar</option>
+                </select>
+              </label>
+            </div>
+            <div class="total-box">
+              <span>Total Harga</span>
+              <strong id="fTotal">Rp 0</strong>
+            </div>
+            <button type="submit" class="btn primary" id="btnSubmit">Simpan Penjualan</button>
+          </form>
+        </div>
+
+        <div class="card">
+          <h2>Harga Special PO</h2>
+          <table class="table">
+            <thead><tr><th>Kategori</th><th>Harga</th><th>Terjual</th></tr></thead>
+            <tbody id="priceList"></tbody>
+          </table>
+
+          <h2 style="margin-top:22px">Size Chart (Panjang × Lebar cm)</h2>
+          <div class="table-wrap">
+            <table class="table size-chart">
+              <thead><tr><th>Ukuran</th><th>Cowok</th><th>Cewek</th><th>Anak2</th></tr></thead>
+              <tbody>
+                <tr><td><span class="badge">XS</span></td><td>67×46</td><td>60×38</td><td>50×36</td></tr>
+                <tr><td><span class="badge">S</span></td><td>70×48</td><td>62×40</td><td>52×38</td></tr>
+                <tr><td><span class="badge">M</span></td><td>73×50</td><td>64×42</td><td>55×40</td></tr>
+                <tr><td><span class="badge">L</span></td><td>76×52</td><td>66×44</td><td>58×42</td></tr>
+                <tr><td><span class="badge">XL</span></td><td>79×54</td><td>68×46</td><td>61×44</td></tr>
+                <tr><td><span class="badge">XXL</span></td><td>82×56</td><td>70×48</td><td>64×46</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h2 style="margin-top:22px">Transaksi Terakhir</h2>
+          <ul id="recentList" class="recent"></ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB REKAP -->
+    <section class="panel" id="tab-rekap">
+      <div class="card">
+        <div class="card-head">
+          <h2>Rekap Penjualan per Anggota (20 Anggota)</h2>
+          <button class="btn" id="btnExportRekap">Export CSV</button>
+        </div>
+        <div class="table-wrap">
+          <table class="table" id="rekapTable"></table>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB DATA -->
+    <section class="panel" id="tab-data">
+      <div class="card">
+        <div class="card-head">
+          <h2>Semua Data Penjualan</h2>
+          <div class="filters">
+            <select id="filterMember"></select>
+            <select id="filterCategory"></select>
+            <select id="filterSize"></select>
+            <select id="filterPaid">
+              <option value="">Semua Status</option>
+              <option value="1">✅ Sudah Bayar</option>
+              <option value="0">❌ Belum Bayar</option>
+            </select>
+            <button class="btn" id="btnExportData">Export CSV</button>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table class="table">
+            <thead>
+              <tr><th>#</th><th>Tanggal</th><th>Anggota</th><th>Pembeli</th><th>Kategori</th><th>Ukuran</th><th>Jml</th><th>Harga</th><th>Total</th><th>Bayar</th><th>Aksi</th></tr>
+            </thead>
+            <tbody id="dataBody"></tbody>
+            <tfoot><tr><th colspan="6">TOTAL</th><th id="dataQty">0</th><th></th><th id="dataTotal">Rp 0</th><th colspan="2"></th></tr></tfoot>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB SETTING -->
+    <section class="panel" id="tab-setting">
+      <div class="grid-2">
+        <div class="card">
+          <h2>Harga per Kategori</h2>
+          <p class="muted">Ubah harga lalu klik simpan (butuh PIN admin). Harga baru berlaku untuk transaksi berikutnya.</p>
+          <div id="priceSettings"></div>
+          <button class="btn primary" id="btnSavePrices">Simpan Harga</button>
+        </div>
+        <div class="card">
+          <h2>Nama 20 Anggota</h2>
+          <p class="muted">Ganti nama anggota sesuai data club (butuh PIN admin).</p>
+          <div id="memberSettings" class="member-grid"></div>
+          <button class="btn primary" id="btnSaveMembers">Simpan Nama Anggota</button>
+          <hr />
+          <button class="btn danger" id="btnReset">Hapus Semua Data Penjualan</button>
+          <button class="btn" id="btnLogout" style="width:100%;margin-top:10px">Lupakan PIN Admin di Browser Ini</button>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Modal Edit Transaksi -->
+  <div id="editModal" class="modal">
+    <div class="modal-card">
+      <div class="card-head">
+        <h2>Edit Transaksi</h2>
+        <button type="button" class="btn small" id="btnCloseEdit">✕</button>
+      </div>
+      <form id="editForm">
+        <input type="hidden" id="eId" />
+        <label>Anggota (Penjual)
+          <select id="eMember" required></select>
+        </label>
+        <label>Nama Pembeli
+          <input type="text" id="eBuyer" placeholder="Opsional" />
+        </label>
+        <div class="row">
+          <label>Kategori
+            <select id="eCategory" required></select>
+          </label>
+          <label>Ukuran Baju
+            <select id="eSize" required></select>
+          </label>
+        </div>
+        <div class="row">
+          <label>Jumlah
+            <input type="number" id="eQty" min="1" required />
+          </label>
+          <label>Tanggal
+            <input type="date" id="eDate" required />
+          </label>
+        </div>
+        <label>Status Bayar
+          <select id="ePaid">
+            <option value="0">❌ Belum Bayar</option>
+            <option value="1">✅ Sudah Bayar</option>
+          </select>
+        </label>
+        <div class="total-box">
+          <span>Total Harga</span>
+          <strong id="eTotal">Rp 0</strong>
+        </div>
+        <button type="submit" class="btn primary" id="btnSaveEdit">Simpan Perubahan</button>
+      </form>
+    </div>
+  </div>
+
+  <div id="toast" class="toast"></div>
+  <script src="config.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
