@@ -34,7 +34,7 @@
       <div class="stat"><span>Total Kaos Terjual</span><strong id="statQty">0</strong></div>
       <div class="stat"><span>Total Pendapatan</span><strong id="statTotal">Rp 0</strong></div>
       <div class="stat"><span>Jumlah Transaksi</span><strong id="statTrx">0</strong></div>
-      <div class="stat"><span>Penjual Terbaik</span><strong id="statTop">-</strong></div>
+      <div class="stat"><span>Pendapatan Bersih</span><strong id="statNet" style="color:#46c97a">Rp 0</strong></div>
     </section>
 
     <!-- TAB INPUT -->
@@ -114,6 +114,27 @@
 
     <!-- TAB REKAP -->
     <section class="panel" id="tab-rekap">
+      <div class="card" style="margin-bottom:24px">
+        <div class="card-head">
+          <h2>Rekap Pesanan untuk Tukang Sablon</h2>
+          <div class="actions">
+            <button class="btn" id="btnCopyPrint">📋 Salin Teks WA</button>
+            <button class="btn" id="btnExportPrint">Export CSV Cetak</button>
+          </div>
+        </div>
+        <div id="printSummary"></div>
+      </div>
+
+      <div class="card" style="margin-bottom:24px">
+        <div class="card-head">
+          <h2>Pendapatan Bersih (Dari Yang Sudah Bayar)</h2>
+        </div>
+        <div class="table-wrap">
+          <table class="table" id="profitTable"></table>
+        </div>
+        <p id="unpaidInfo" class="muted" style="margin:12px 0 0"></p>
+      </div>
+
       <div class="card">
         <div class="card-head">
           <h2>Rekap Penjualan per Anggota (20 Anggota)</h2>
@@ -158,10 +179,16 @@
     <section class="panel" id="tab-setting">
       <div class="grid-2">
         <div class="card">
-          <h2>Harga per Kategori</h2>
-          <p class="muted">Ubah harga lalu klik simpan (butuh PIN admin). Harga baru berlaku untuk transaksi berikutnya.</p>
+          <h2>Harga Jual per Kategori</h2>
+          <p class="muted">Ubah harga jual lalu klik simpan (butuh PIN admin). Harga baru berlaku untuk transaksi berikutnya.</p>
           <div id="priceSettings"></div>
-          <button class="btn primary" id="btnSavePrices">Simpan Harga</button>
+          <button class="btn primary" id="btnSavePrices">Simpan Harga Jual</button>
+
+          <hr />
+          <h2>Harga dari Tukang Sablon</h2>
+          <p class="muted">Modal cetak per pcs untuk menghitung pendapatan bersih (butuh PIN admin).</p>
+          <div id="costSettings"></div>
+          <button class="btn primary" id="btnSaveCosts">Simpan Harga Sablon</button>
         </div>
         <div class="card">
           <h2>Nama 20 Anggota</h2>

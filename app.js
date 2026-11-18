@@ -3,6 +3,7 @@ const CATEGORIES = ["Cowok", "Cewek", "Anak2"];
 const CATEGORY_LABEL = { Cowok: "Dewasa Cowok", Cewek: "Dewasa Cewek", Anak2: "Anak-anak" };
 const SIZES = ["XS", "S", "M", "L", "XL", "XXL"];
 const DEFAULT_PRICES = { Cowok: 130000, Cewek: 130000, Anak2: 110000 };
+const DEFAULT_COSTS = { Cowok: 80000, Cewek: 80000, Anak2: 80000 };
 const DEFAULT_MEMBERS = [
   "Pande kembar",
   "Dewa bola",
@@ -32,10 +33,10 @@ const AUTO_REFRESH_MS = 60000;
 const configured = typeof SCRIPT_URL === "string" && SCRIPT_URL.startsWith("https://script.google.com/");
 
 // ====== State (tampilkan cache dulu agar cepat, lalu sinkron dari Google Sheets) ======
-let state = { members: [...DEFAULT_MEMBERS], prices: { ...DEFAULT_PRICES }, sales: [] };
+let state = { members: [...DEFAULT_MEMBERS], prices: { ...DEFAULT_PRICES }, costs: { ...DEFAULT_COSTS }, sales: [] };
 try {
   const c = JSON.parse(localStorage.getItem(CACHE_KEY));
-  if (c && c.members && c.prices && c.sales) state = c;
+  if (c && c.members && c.prices && c.sales) state = { costs: { ...DEFAULT_COSTS }, ...c };
 } catch (e) {}
 let busy = false;
 
@@ -83,9 +84,11 @@ function applyData(d) {
     }
     return s;
   });
+  const costs = d.costs?.Cowok !== undefined ? d.costs : (state.costs || { ...DEFAULT_COSTS });
   state = {
     members: oldBackend && d.members?.[0] === "Anggota 1" ? [...DEFAULT_MEMBERS] : (d.members?.length >= DEFAULT_MEMBERS.length ? d.members : [...DEFAULT_MEMBERS]),
     prices,
+    costs,
     sales,
   };
   localStorage.setItem(CACHE_KEY, JSON.stringify(state));
@@ -256,12 +259,9 @@ function render() {
   const totalQty = state.sales.reduce((a, s) => a + s.qty, 0);
   const totalRp = state.sales.reduce((a, s) => a + s.total, 0);
   const ms = memberStats();
-  const top = [...ms].sort((a, b) => b.total - a.total)[0];
-
   $("statQty").textContent = totalQty;
   $("statTotal").textContent = rp(totalRp);
   $("statTrx").textContent = state.sales.length;
-  $("statTop").textContent = top && top.total > 0 ? top.name : "-";
 
   // Daftar harga per kategori
   $("priceList").innerHTML = CATEGORIES.map((c) => {
@@ -274,6 +274,82 @@ function render() {
   $("recentList").innerHTML = recent.length
     ? recent.map((s) => `<li><div>${esc(state.members[s.member])} <small>• ${s.qty}x ${esc(s.category || "")} ${esc(s.size)}</small></div><strong>${rp(s.total)}</strong></li>`).join("")
     : `<li><small>Belum ada transaksi</small></li>`;
+
+  // Rekap pesanan untuk tukang sablon (gamblang per kategori & ukuran)
+  const pm = printMatrix();
+  const cowok = pm.find((r) => r.cat === "Cowok");
+  const cewek = pm.find((r) => r.cat === "Cewek");
+  const anak = pm.find((r) => r.cat === "Anak2");
+  const dewasaQty = cowok.qty + cewek.qty;
+
+  const renderBox = (title, row) => `
+    <div class="print-box">
+      <div class="print-box-head">
+        <h3>${title}</h3>
+        <strong>${row.qty} pcs</strong>
+      </div>
+      <div class="size-list">
+        ${SIZES.map((s) => {
+          const n = row.bySize[s] || 0;
+          return `<div class="size-item ${n > 0 ? "has" : ""}"><span>${s}</span><strong>${n}</strong></div>`;
+        }).join("")}
+      </div>
+    </div>`;
+
+  $("printSummary").innerHTML = `
+    <div class="print-totals">
+      <div class="print-pill main"><span>Total Semua Kaos</span><strong>${totalQty} pcs</strong></div>
+      <div class="print-pill"><span>Total Dewasa (Cowok + Cewek)</span><strong>${dewasaQty} pcs</strong></div>
+      <div class="print-pill"><span>Total Anak-anak</span><strong>${anak.qty} pcs</strong></div>
+    </div>
+    <div class="print-grid">
+      ${renderBox("Dewasa Cowok", cowok)}
+      ${renderBox("Dewasa Cewek", cewek)}
+      ${renderBox("Anak-anak", anak)}
+    </div>`;
+
+  // Tabel Pendapatan Bersih (hanya dari yang Sudah Bayar)
+  const paidSales = state.sales.filter((s) => s.paid);
+  const unpaidSales = state.sales.filter((s) => !s.paid);
+  const profitRows = CATEGORIES.map((cat) => {
+    const rows = paidSales.filter((s) => s.category === cat);
+    const qty = rows.reduce((a, s) => a + s.qty, 0);
+    const gross = rows.reduce((a, s) => a + s.total, 0);
+    const unitCost = state.costs?.[cat] ?? DEFAULT_COSTS[cat];
+    const cost = qty * unitCost;
+    return { cat, qty, gross, unitCost, cost, net: gross - cost };
+  });
+  const pQty = profitRows.reduce((a, r) => a + r.qty, 0);
+  const pGross = profitRows.reduce((a, r) => a + r.gross, 0);
+  const pCost = profitRows.reduce((a, r) => a + r.cost, 0);
+  const pNet = profitRows.reduce((a, r) => a + r.net, 0);
+  $("statNet").textContent = rp(pNet);
+
+  $("profitTable").innerHTML = `
+    <thead><tr>
+      <th>Kategori</th><th class="num">Sudah Bayar</th><th class="num">Uang Masuk</th>
+      <th class="num">Biaya Sablon</th><th class="num">Pendapatan Bersih</th>
+    </tr></thead>
+    <tbody>${profitRows.map((r) => `<tr>
+      <td><span class="badge">${CATEGORY_LABEL[r.cat]}</span></td>
+      <td class="num">${r.qty} pcs</td>
+      <td class="num">${rp(r.gross)}</td>
+      <td class="num">${rp(r.cost)} <small style="color:var(--muted)">(@ ${rp(r.unitCost)})</small></td>
+      <td class="num"><b style="color:#46c97a">${rp(r.net)}</b></td>
+    </tr>`).join("")}</tbody>
+    <tfoot><tr>
+      <th>TOTAL PENDAPATAN BERSIH</th>
+      <th class="num">${pQty} pcs</th>
+      <th class="num">${rp(pGross)}</th>
+      <th class="num">${rp(pCost)}</th>
+      <th class="num">${rp(pNet)}</th>
+    </tr></tfoot>`;
+
+  const uQty = unpaidSales.reduce((a, s) => a + s.qty, 0);
+  const uTotal = unpaidSales.reduce((a, s) => a + s.total, 0);
+  $("unpaidInfo").innerHTML = uQty > 0
+    ? `❌ Belum bayar: <b>${uQty} pcs</b> (${rp(uTotal)}) — belum dihitung ke pendapatan bersih di atas.`
+    : `✅ Semua pesanan yang masuk sudah lunas dibayar.`;
 
   // Rekap anggota (urut berdasarkan total)
   const sorted = [...ms].sort((a, b) => b.total - a.total || a.i - b.i);
@@ -296,6 +372,14 @@ function render() {
       <th class="num">${totalQty}</th><th class="num">${rp(totalRp)}</th></tr></tfoot>`;
 
   renderData();
+}
+
+function printMatrix() {
+  return CATEGORIES.map((cat) => {
+    const rows = state.sales.filter((s) => s.category === cat);
+    const bySize = Object.fromEntries(SIZES.map((sz) => [sz, rows.filter((r) => r.size === sz).reduce((a, r) => a + r.qty, 0)]));
+    return { cat, bySize, qty: rows.reduce((a, r) => a + r.qty, 0) };
+  });
 }
 
 function filteredSales() {
@@ -391,6 +475,8 @@ $("editForm").addEventListener("submit", async (e) => {
 function renderSettings() {
   $("priceSettings").innerHTML = CATEGORIES.map((c) =>
     `<label>${CATEGORY_LABEL[c]}<input type="number" min="0" step="1000" data-cat="${c}" value="${state.prices[c]}" /></label>`).join("");
+  $("costSettings").innerHTML = CATEGORIES.map((c) =>
+    `<label>${CATEGORY_LABEL[c]}<input type="number" min="0" step="1000" data-cat="${c}" value="${state.costs?.[c] ?? DEFAULT_COSTS[c]}" /></label>`).join("");
   $("memberSettings").innerHTML = state.members.map((m, i) =>
     `<input type="text" data-idx="${i}" value="${esc(m)}" placeholder="${esc(DEFAULT_MEMBERS[i] || `Anggota ${i + 1}`)}" />`).join("");
 }
@@ -400,7 +486,15 @@ $("btnSavePrices").addEventListener("click", () => {
   document.querySelectorAll("#priceSettings input").forEach((inp) => {
     prices[inp.dataset.cat] = Math.max(0, parseInt(inp.value) || 0);
   });
-  adminAction({ action: "savePrices", prices }, "💰 Harga disimpan");
+  adminAction({ action: "savePrices", prices }, "💰 Harga jual disimpan");
+});
+
+$("btnSaveCosts").addEventListener("click", () => {
+  const costs = {};
+  document.querySelectorAll("#costSettings input").forEach((inp) => {
+    costs[inp.dataset.cat] = Math.max(0, parseInt(inp.value) || 0);
+  });
+  adminAction({ action: "saveCosts", costs }, "🖨️ Harga sablon disimpan");
 });
 
 $("btnSaveMembers").addEventListener("click", () => {
@@ -434,6 +528,47 @@ $("btnExportData").addEventListener("click", () => {
   downloadCSV(`penjualan-batlantas-${today()}.csv`, [
     ["No", "Tanggal", "Anggota", "Pembeli", "Kategori", "Ukuran", "Jumlah", "Harga", "Total", "Status Bayar"],
     ...filteredSales().map((s, i) => [i + 1, s.date, state.members[s.member], s.buyer, s.category, s.size, s.qty, s.price, s.total, s.paid ? "Sudah Bayar" : "Belum Bayar"]),
+  ]);
+});
+$("btnCopyPrint").addEventListener("click", async () => {
+  const pm = printMatrix();
+  const cowok = pm.find((r) => r.cat === "Cowok");
+  const cewek = pm.find((r) => r.cat === "Cewek");
+  const anak = pm.find((r) => r.cat === "Anak2");
+  const totalAll = cowok.qty + cewek.qty + anak.qty;
+  const fmt = (title, row) => {
+    const lines = SIZES.filter((s) => row.bySize[s] > 0).map((s) => `- ${s}: ${row.bySize[s]} pcs`);
+    return `*${title} (${row.qty} pcs):*\n` + (lines.length ? lines.join("\n") : "- (belum ada)");
+  };
+  const text = [
+    `*ORDER KAOS BAT' LANTAS #3 ANNIVERSARY*`,
+    `Total: ${totalAll} pcs (Dewasa: ${cowok.qty + cewek.qty} | Anak: ${anak.qty})`,
+    "",
+    fmt("DEWASA COWOK", cowok),
+    "",
+    fmt("DEWASA CEWEK", cewek),
+    "",
+    fmt("ANAK-ANAK", anak),
+  ].join("\n");
+  try {
+    await navigator.clipboard.writeText(text);
+    toast("📋 Teks pesanan disalin! Tinggal paste ke WhatsApp");
+  } catch (e) {
+    prompt("Salin teks pesanan di bawah ini:", text);
+  }
+});
+$("btnExportPrint").addEventListener("click", () => {
+  const pm = printMatrix();
+  const cowok = pm.find((r) => r.cat === "Cowok");
+  const cewek = pm.find((r) => r.cat === "Cewek");
+  const anak = pm.find((r) => r.cat === "Anak2");
+  downloadCSV(`rekap-cetak-batlantas-${today()}.csv`, [
+    ["Kategori", ...SIZES, "Total Cetak"],
+    ["Dewasa (Total)", ...SIZES.map((s) => cowok.bySize[s] + cewek.bySize[s]), cowok.qty + cewek.qty],
+    ["- Dewasa Cowok", ...SIZES.map((s) => cowok.bySize[s]), cowok.qty],
+    ["- Dewasa Cewek", ...SIZES.map((s) => cewek.bySize[s]), cewek.qty],
+    ["Anak-anak", ...SIZES.map((s) => anak.bySize[s]), anak.qty],
+    ["TOTAL", ...SIZES.map((s) => pm.reduce((a, r) => a + r.bySize[s], 0)), pm.reduce((a, r) => a + r.qty, 0)],
   ]);
 });
 $("btnExportRekap").addEventListener("click", () => {

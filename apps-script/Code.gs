@@ -18,6 +18,7 @@ const ADMIN_PIN = "1234"; // <-- GANTI PIN INI!
 const CATEGORIES = ["Cowok", "Cewek", "Anak2"];
 const SIZES = ["XS", "S", "M", "L", "XL", "XXL"];
 const DEFAULT_PRICES = { Cowok: 130000, Cewek: 130000, Anak2: 110000 };
+const DEFAULT_COSTS = { Cowok: 80000, Cewek: 80000, Anak2: 80000 };
 const DEFAULT_MEMBERS = [
   "Pande kembar",
   "Dewa bola",
@@ -70,11 +71,16 @@ function setup() {
   const firstPriceKey = prices.getLastRow() >= 2 ? String(prices.getRange(2, 1).getValue()).trim() : "";
   if (prices.getLastRow() === 0 || CATEGORIES.indexOf(firstPriceKey) < 0) {
     prices.clear();
-    const rows = [["Kategori", "Harga"]].concat(CATEGORIES.map((c) => [c, DEFAULT_PRICES[c]]));
-    prices.getRange(1, 1, rows.length, 2).setValues(rows);
+    const rows = [["Kategori", "Harga", "Biaya Sablon"]].concat(CATEGORIES.map((c) => [c, DEFAULT_PRICES[c], DEFAULT_COSTS[c]]));
+    prices.getRange(1, 1, rows.length, 3).setValues(rows);
     prices.setFrozenRows(1);
-    prices.getRange(1, 1, 1, 2).setFontWeight("bold").setBackground("#ff7a1a");
-    prices.getRange("B:B").setNumberFormat("#,##0");
+    prices.getRange(1, 1, 1, 3).setFontWeight("bold").setBackground("#ff7a1a");
+    prices.getRange("B:C").setNumberFormat("#,##0");
+  } else if (String(prices.getRange(1, 3).getValue()).trim() !== "Biaya Sablon") {
+    prices.getRange(1, 3).setValue("Biaya Sablon").setFontWeight("bold").setBackground("#ff7a1a");
+    const rows = CATEGORIES.map((c) => [DEFAULT_COSTS[c]]);
+    prices.getRange(2, 3, rows.length, 1).setValues(rows);
+    prices.getRange("C:C").setNumberFormat("#,##0");
   }
 
   let sales = ss.getSheetByName(SH_SALES) || ss.insertSheet(SH_SALES);
@@ -154,6 +160,7 @@ function doPost(e) {
       case "togglePaid":  requirePin(body.pin); togglePaid(body.id); break;
       case "deleteSale":  requirePin(body.pin); deleteSale(body.id); break;
       case "savePrices":  requirePin(body.pin); savePrices(body.prices); break;
+      case "saveCosts":   requirePin(body.pin); saveCosts(body.costs); break;
       case "saveMembers": requirePin(body.pin); saveMembers(body.members); break;
       case "resetSales":  requirePin(body.pin); resetSales(); break;
       case "checkPin":    requirePin(body.pin); break;
@@ -176,11 +183,16 @@ function getAll() {
     .map((r, i) => String(r[0] || "").trim() || DEFAULT_MEMBERS[i] || ("Anggota " + (i + 1)));
 
   const prices = Object.assign({}, DEFAULT_PRICES);
+  const costs = Object.assign({}, DEFAULT_COSTS);
   const pSheet = ss.getSheetByName(SH_PRICES);
   if (pSheet.getLastRow() > 1) {
-    pSheet.getRange(2, 1, pSheet.getLastRow() - 1, 2).getValues().forEach((r) => {
+    const cols = Math.min(3, pSheet.getLastColumn());
+    pSheet.getRange(2, 1, pSheet.getLastRow() - 1, cols).getValues().forEach((r) => {
       const c = String(r[0]).trim();
-      if (CATEGORIES.indexOf(c) >= 0) prices[c] = Number(r[1]) || 0;
+      if (CATEGORIES.indexOf(c) >= 0) {
+        prices[c] = Number(r[1]) || 0;
+        if (cols >= 3 && r[2] !== "" && r[2] !== null) costs[c] = Number(r[2]) || 0;
+      }
     });
   }
 
@@ -205,7 +217,7 @@ function getAll() {
     });
   }
 
-  return { members: members, prices: prices, sales: sales };
+  return { members: members, prices: prices, costs: costs, sales: sales };
 }
 
 function validateSale(sale) {
@@ -274,6 +286,12 @@ function savePrices(prices) {
   if (!prices) throw new Error("Data harga kosong");
   const rows = CATEGORIES.map((c) => [c, Math.max(0, parseInt(prices[c], 10) || 0)]);
   SpreadsheetApp.getActive().getSheetByName(SH_PRICES).getRange(2, 1, rows.length, 2).setValues(rows);
+}
+
+function saveCosts(costs) {
+  if (!costs) throw new Error("Data biaya sablon kosong");
+  const rows = CATEGORIES.map((c) => [Math.max(0, parseInt(costs[c], 10) || 0)]);
+  SpreadsheetApp.getActive().getSheetByName(SH_PRICES).getRange(2, 3, rows.length, 1).setValues(rows);
 }
 
 function saveMembers(members) {
